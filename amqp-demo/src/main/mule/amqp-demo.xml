@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:amqp="http://www.mulesoft.org/schema/mule/amqp"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/amqp http://www.mulesoft.org/schema/mule/amqp/current/mule-amqp.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	<amqp:config name="AMQP_Config" doc:name="AMQP Config" doc:id="a27ccea1-1979-4652-80ba-5efec761b7b3" >
+		<amqp:connection host="hedgehog.rmq.cloudamqp.com" virtualHost="svianfvw" username="svianfvw" password="password" />
+	</amqp:config>
+	<configuration doc:name="Configuration" doc:id="42dd5a5d-9773-4f01-b598-f64d543aced5" defaultErrorHandler-ref="amqp-demoError_Handler" />
+	<flow name="amqp-demoFlow.hotBeverageOrderListener" doc:id="d7758ffe-d8bb-4100-8b5d-ab506d397a87" >
+		<amqp:listener doc:name="Hot Beverage Order Listener" doc:id="c2e68c0e-58c8-4f76-9c84-f93a1252d820" config-ref="AMQP_Config" queueName="HOT_BEVERAGE_ORDER" ackMode="MANUAL" outputMimeType="application/json"/>
+		<set-variable value="#[attributes.ackId]" doc:name="Set 'ackId' Variable" doc:id="621d588f-8af4-45f4-ad3f-94d22ed06953" variableName="ackId"/>
+		<ee:transform doc:name="Transform Message" doc:id="4b21fb2b-631b-416c-a1db-f0edaa67ff52" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="orderId" ><![CDATA[%dw 2.0
+output application/json
+---
+payload["orderId"]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Log Payload" doc:id="11a8379e-9bfe-4276-bbe0-d067ef988a8e" message="#[payload]"/>
+		<amqp:ack doc:name="Ack" doc:id="949633ce-0f64-4a9d-8063-be7a452d1b42" ackId="#[vars.ackId]"/>
+		<ee:transform doc:name="Create order complete message" doc:id="cd82263d-9a8d-498c-a6fb-a9d645ad0a6c" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"orderId": vars.orderId,
+	"status": "completed"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="Update order status" doc:id="6b7f6b4d-e6b8-4088-b071-64109fddddb9" name="amqp-demoFlow.orderStatus"/>
+	</flow>
+	<flow name="amqp-demoFlow.cakeOrderListener" doc:id="a654f6cd-7bba-4d8a-86d4-f2c03ddec5c0" >
+		<amqp:listener doc:name="Cake Order Listener" doc:id="9bb60bf8-03e4-467b-8b54-4b38cea9f1c3" config-ref="AMQP_Config" queueName="CAKE_ORDER" ackMode="MANUAL" outputMimeType="application/json"/>
+		<set-variable value="#[attributes.ackId]" doc:name="Set 'ackId' Variable" doc:id="0849903c-37f4-498a-b422-15812fbb3213" variableName="ackId"/>
+		<ee:transform doc:name="Transform Message" doc:id="04c42fdb-86f0-4d7c-9d8d-ab48e4d00e17" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="orderId" ><![CDATA[%dw 2.0
+output application/json
+---
+payload["orderId"]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Log Payload" doc:id="65f856fb-4afa-4b1a-8314-b7cf5fc24af3" message="#[payload]"/>
+		<amqp:ack doc:name="Ack with fake ID" doc:id="31da9840-468f-4264-960f-dc7456492201" ackId="0"/>
+<!-- 		<amqp:ack doc:name="Ack" doc:id="c959c1d1-19d5-4c0d-95f2-8c61dcdc3519" ackId="#[vars.ackId]"/> -->
+		<ee:transform doc:name="Create order complete message" doc:id="3ad43a51-1142-4bf2-ac9c-499a3b44540d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"orderId": vars.orderId,
+	"status": "completed"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="Update order status" doc:id="f54d4463-2d25-4a54-8c7f-79d9cc192d8e" name="amqp-demoFlow.orderStatus"/>
+	
+</flow>
+	<flow name="amqp-demoFlow.orderStatus" doc:id="05bb10e4-91dd-4f81-8547-782c1aba0100" >
+		<amqp:publish doc:name="Publish" doc:id="38c70861-2a38-46c5-bfd1-1081b1d5ac6f" config-ref="AMQP_Config" exchangeName="ORDER">
+			<amqp:routing-keys >
+				<amqp:routing-key value="orderStatus" />
+			</amqp:routing-keys>
+		</amqp:publish>
+	</flow>
+	<error-handler name="amqp-demoError_Handler" doc:id="596916d0-faf1-43be-8f3f-6a7d1e9e6a2c" >
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="406ce2e5-d7e2-4e00-81a7-9490dd7016ee" >
+			<amqp:reject doc:name="Reject" doc:id="dad06df7-df95-4aa1-90a9-f0bc80de7be7" ackId="#[vars.ackId]"/>
+			<ee:transform doc:name="Create order error message" doc:id="ff00384f-16c0-40bf-9518-b6327c20e06e" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"orderId": vars.orderId,
+	"status": "failed"
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<flow-ref doc:name="Update order status" doc:id="662bbc40-1a33-4eec-a200-80f36a393ee2" name="amqp-demoFlow.orderStatus"/>
+		</on-error-propagate>
+	</error-handler>
+</mule>
